@@ -48,9 +48,9 @@ jobs:
           LOKALISE_PROJECT_ID: ${{ vars.LOKALISE_PROJECT_ID }}
           LOKALISE_SOURCE_LANG: ${{ vars.LOKALISE_SOURCE_LANG }}
         run: |
-          chmod +x .github/scripts/lokalise_upload.sh
+          chmod +x .github/src/scripts/lokalise_upload.sh
 
-          echo ${ALL_FILES} | tr ' ' '\n' | xargs -P 6 -I {} bash -c '. ./.github/scripts/lokalise_upload.sh && upload_file "$@"' _ "{}" "$LOKALISE_PROJECT_ID" "$LOKALISE_SOURCE_LANG"
+          echo ${ALL_FILES} | tr ' ' '\n' | xargs -P 6 -I {} bash -c '. ./.github/src/scripts/lokalise_upload.sh && upload_file "$@"' _ "{}" "$LOKALISE_PROJECT_ID" "$LOKALISE_SOURCE_LANG"
 
           if [ $? -ne 0 ]; then
             echo "File upload failed"
