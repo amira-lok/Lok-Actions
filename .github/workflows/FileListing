@@ -1,0 +1,30 @@
+name: File listing
+run-name: File listing
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      LOKALISE_SOURCE_LANG: ${{ vars.LOKALISE_SOURCE_LANG }}
+      LOKALISE_TRANSLATIONS_PATH: ${{ vars.LOKALISE_TRANSLATIONS_PATH }}
+      LOKALISE_FILE_FORMAT: ${{ vars.LOKALISE_FILE_FORMAT }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Find All Translation Files
+        id: find-files
+        run: |
+          ALL_FILES=$(find "${{ env.LOKALISE_TRANSLATIONS_PATH }}/${{ env.LOKALISE_SOURCE_LANG }}" -name "*.${{ env.LOKALISE_FILE_FORMAT }}" -type f | tr '\n' ' ')
+          
+          if [ -z "$ALL_FILES" ]; then
+            echo "No translation files found."
+            echo "has_files=false" >> $GITHUB_ENV
+          else
+            echo "Translation files found:"
+            echo "$ALL_FILES"
+            echo "ALL_FILES=$ALL_FILES" >> $GITHUB_ENV
+            echo "has_files=true" >> $GITHUB_ENV
+          fi
