@@ -17,7 +17,7 @@ jobs:
       - name: Find All Translation Files
         id: find-files
         run: |
-          ALL_FILES=$(find "${{ env.LOKALISE_TRANSLATIONS_PATH }}/${{ env.LOKALISE_SOURCE_LANG }}" -name "*.${{ env.LOKALISE_FILE_FORMAT }}" -type f | tr '\n' ' ')
+          ALL_FILES=$(find "${{ env.LOKALISE_TRANSLATIONS_PATH }}/${{ env.LOKALISE_SOURCE_LANG }}" -name "*.${{ env.LOKALISE_FILE_FORMAT }}" -type f)
           
           if [ -z "$ALL_FILES" ]; then
             echo "No translation files found."
