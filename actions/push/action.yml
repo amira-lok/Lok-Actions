@@ -33,30 +33,84 @@ runs:
       id: changed-files
       uses: tj-actions/changed-files@v44
       with:
-        files: "${{ inputs.translations_path }}/${{ inputs.base_lang }}/**.${{ inputs.file_format }}"
+        files: "${{ inputs.translations_path }}/${{ inputs.base_lang }}/**/**.${{ inputs.file_format }}"
+
+    - name: Detect Triggering Branch
+      if: steps.changed-files.outputs.any_changed == 'false'
+      id: detect-branch
+      shell: bash
+      run: echo "TRIGGERING_BRANCH=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+
+    - name: Check if this is the first run on the branch
+      if: steps.changed-files.outputs.any_changed == 'false'
+      id: check-first-run
+      shell: bash
+      run: |
+        git fetch origin ${{ steps.detect-branch.outputs.TRIGGERING_BRANCH }} --depth=100
+
+        if git log --oneline | fgrep -q '[Lokalise-Upload-Complete]'; then
+          echo "first_run=false" >> $GITHUB_OUTPUT
+        else
+          echo "first_run=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Find all translation files
+      if: steps.changed-files.outputs.any_changed == 'false' && steps.check-first-run.outputs.first_run == 'true'
+      id: find-files
+      shell: bash
+      run: |
+        ALL_FILES=$(find "${{ inputs.translations_path }}/${{ inputs.base_lang }}" -name "*.${{ inputs.file_format }}" -type f | tr '\n' ' ')
+        echo "Found files: $ALL_FILES"
+
+        if [ -z "$ALL_FILES" ]; then
+          echo "No translation files found."
+          echo "has_files=false" >> $GITHUB_OUTPUT
+        else
+          echo "ALL_FILES=$ALL_FILES" >> $GITHUB_OUTPUT
+          echo "has_files=true" >> $GITHUB_OUTPUT
+        fi
 
     - name: Install Lokalise CLI
-      if: steps.changed-files.outputs.any_changed == 'true'
+      if: steps.check-first-run.outputs.first_run == 'true' || steps.changed-files.outputs.any_changed == 'true'
       shell: bash
       run: |
         chmod +x "${{ github.action_path }}/../../src/scripts/install_lokalise_cli.sh"
         "${{ github.action_path }}/../../src/scripts/install_lokalise_cli.sh"
 
     - name: Push translation files to Lokalise
-      if: steps.changed-files.outputs.any_changed == 'true'
+      if: steps.check-first-run.outputs.first_run == 'true' || steps.changed-files.outputs.any_changed == 'true'
       shell: bash
       env:
         LOKALISE_TOKEN: ${{ inputs.api_token }}
         CLI_ADD_PARAMS: ${{ inputs.additional_params }}
         BASE_LANG: ${{ inputs.base_lang }}
       run: |
-        ALL_CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+        if [ "${{ steps.check-first-run.outputs.first_run }}" == "true" ]; then
+          ALL_FILES="${{ steps.find-files.outputs.ALL_FILES }}"
+        else
+          ALL_CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+        fi
 
+        if [ -z "${ALL_FILES}" ] && [ -z "${ALL_CHANGED_FILES}" ]; then
+          echo "No files to upload."
+          exit 0
+        fi
+        
         chmod +x "${{ github.action_path }}/../../src/scripts/lokalise_upload.sh"
 
-        echo "$ALL_CHANGED_FILES" | tr ' ' '\n' | xargs -P 6 -I {} bash -c '. "${{ github.action_path }}/../../src/scripts/lokalise_upload.sh" && upload_file "$@"' _ "{}" "${{ inputs.project_id }}"
+        # Pass ALL_FILES or ALL_CHANGED_FILES
+        echo "${ALL_FILES:-$ALL_CHANGED_FILES}" | tr ' ' '\n' | xargs -P 6 -I {} bash -c '. "${{ github.action_path }}/../../src/scripts/lokalise_upload.sh" && upload_file "$@"' _ "{}" "${{ inputs.project_id }}"
 
         if [ $? -ne 0 ]; then
           echo "File upload failed"
           exit 1
         fi
+
+    - name: Mark Lokalise upload as complete
+      if: steps.check-first-run.outputs.first_run == 'true'
+      shell: bash
+      run: |
+        git config --global user.name "${GITHUB_ACTOR}"
+        git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+        git commit --allow-empty -m "[Lokalise-Upload-Complete]"
+        git push origin ${{ steps.detect-branch.outputs.TRIGGERING_BRANCH }}
